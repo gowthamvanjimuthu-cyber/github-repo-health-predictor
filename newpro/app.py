@@ -12,6 +12,27 @@ import joblib
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+import io
+
+def df_to_pdf(df):
+    buf = io.BytesIO()
+    # Transpose if it's a single row for better fit, otherwise keep as is
+    if len(df) == 1:
+        plot_df = df.T.reset_index()
+        plot_df.columns = ["Metric", "Value"]
+    else:
+        plot_df = df
+        
+    fig, ax = plt.subplots(figsize=(10, max(2, len(plot_df)*0.3 + 1)))
+    ax.axis('tight')
+    ax.axis('off')
+    table = ax.table(cellText=plot_df.astype(str).values, colLabels=plot_df.columns, loc='center', cellLoc='left')
+    table.auto_set_font_size(False)
+    table.set_fontsize(8)
+    table.auto_set_column_width(col=list(range(len(plot_df.columns))))
+    plt.savefig(buf, format='pdf', bbox_inches='tight')
+    plt.close(fig)
+    return buf.getvalue()
 
 from config import FEATURE_COLUMNS, LABEL_ENCODER_PATH, MODEL_PATH, OUTPUT_DIR
 from explanation import activity_score_summary, explain_prediction
@@ -112,13 +133,34 @@ def main():
                 ]
                 st.dataframe(df[[c for c in display_cols if c in df.columns]], use_container_width=True)
 
+                html = df.to_html(index=False)
                 csv = df.to_csv(index=False)
-                st.download_button(
-                    "Download CSV",
-                    csv,
-                    file_name=f"repo_analytics_{datetime.now():%Y%m%d_%H%M%S}.csv",
-                    mime="text/csv",
-                )
+                pdf_bytes = df_to_pdf(df)
+                
+                dl_col1, dl_col2, dl_col3 = st.columns(3)
+                timestamp = f"{datetime.now():%Y%m%d_%H%M%S}"
+                
+                with dl_col1:
+                    st.download_button(
+                        "Download CSV",
+                        csv,
+                        file_name=f"repo_analytics_{timestamp}.csv",
+                        mime="text/csv",
+                    )
+                with dl_col2:
+                    st.download_button(
+                        "Download HTML",
+                        html,
+                        file_name=f"repo_analytics_{timestamp}.html",
+                        mime="text/html",
+                    )
+                with dl_col3:
+                    st.download_button(
+                        "Download PDF",
+                        pdf_bytes,
+                        file_name=f"repo_analytics_{timestamp}.pdf",
+                        mime="application/pdf",
+                    )
 
     with tab3:
         st.subheader("Trained Model")
@@ -207,14 +249,37 @@ def analyze_single(url: str, token: str, model, label_encoder):
     st.pyplot(fig4)
     plt.close(fig4)
 
-    # CSV export
+    # Exports
     export_df = pd.DataFrame([{**stats, "prediction": prediction, **probs}])
-    st.download_button(
-        "Export Analytics (CSV)",
-        export_df.to_csv(index=False),
-        file_name=f"{stats.get('full_name', 'repo').replace('/', '_')}_analytics.csv",
-        mime="text/csv",
-    )
+    
+    html = export_df.to_html(index=False)
+    csv = export_df.to_csv(index=False)
+    pdf_bytes = df_to_pdf(export_df)
+    
+    basename = f"{stats.get('full_name', 'repo').replace('/', '_')}_analytics"
+    
+    dl_col1, dl_col2, dl_col3 = st.columns(3)
+    with dl_col1:
+        st.download_button(
+            "Export Analytics (CSV)",
+            csv,
+            file_name=f"{basename}.csv",
+            mime="text/csv",
+        )
+    with dl_col2:
+        st.download_button(
+            "Export Analytics (HTML)",
+            html,
+            file_name=f"{basename}.html",
+            mime="text/html",
+        )
+    with dl_col3:
+        st.download_button(
+            "Export Analytics (PDF)",
+            pdf_bytes,
+            file_name=f"{basename}.pdf",
+            mime="application/pdf",
+        )
 
 
 if __name__ == "__main__":

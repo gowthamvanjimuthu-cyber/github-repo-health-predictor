@@ -3,3 +3,8 @@ output/
 sample.html
 *.zip
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.env
